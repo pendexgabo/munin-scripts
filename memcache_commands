@@ -1,0 +1,60 @@
+#!/usr/bin/php -q
+<?php
+
+$name = $argv[0];
+
+if (strpos($name, '-') !== false) {
+	list(,$host, $port) = explode('-', $name);
+}
+else {
+	$host = isset($_ENV["MMC_HOST"]) ? $_ENV["MMC_HOST"] : "127.0.0.1";
+	$port = isset($_ENV["MMC_PORT"]) ? $_ENV["MMC_PORT"] : 11211;
+}
+
+if(isset($argv[1]) && ($argv[1] == "autoconf")) {
+	print "yes\n";
+	exit;
+}
+elseif(isset($argv[1]) && ($argv[1] == "config")) {
+	print "graph_title Memcache Commands $host:$port\n";
+	print "graph_args --base 1024\n";
+	print "graph_vlabel cache commands \${graph_period}\n";
+	print "graph_category memcache\n";
+	print "cmd_get.label gets\n";
+	print "cmd_get.type DERIVE\n";
+	print "cmd_get.min 0\n";
+	print "cmd_get.draw LINE1\n";
+	print "cmd_get.info Number of get commands\n";
+	print "cmd_set.label set\n";
+	print "cmd_set.type DERIVE\n";
+	print "cmd_set.min 0\n";
+	print "cmd_set.draw LINE1\n";
+	print "cmd_set.info Number of set commands\n";
+	exit;
+}
+
+$stats = get_mmc_stats($host, $port);
+print "cmd_get.value " . $stats["cmd_get"] . "\n";
+print "cmd_set.value " . $stats["cmd_set"]."\n";
+
+
+function get_mmc_stats($host, $port) {
+	$stats = array();
+
+	$fp = fsockopen($host, $port, $errno, $errstr, 30);
+	if ($fp) {
+		fwrite($fp, "stats\n\r");
+		$ret = fgets($fp, 128);
+		$ret = trim($ret);
+		$count = 0;
+		while ($ret != 'END') {
+			$count++;
+			$stat = explode(" ", $ret);
+			$stats[trim($stat[1])] = trim($stat[2]);
+			$ret = fgets($fp, 128);
+			$ret = trim($ret);
+		}
+		fclose($fp);
+	}
+	return $stats;
+}

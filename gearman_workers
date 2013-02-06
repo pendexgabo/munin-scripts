@@ -1,0 +1,105 @@
+#!/usr/bin/php
+<?php
+
+$name = $argv[0];
+
+if (strpos($name, '-') !== false) {
+	list(,$host, $port) = explode('-', $name);
+}
+else {
+	$host = isset($_ENV["GEARMAN_HOST"]) ? $_ENV["GEARMAN_HOST"] : "127.0.0.1";
+	$port = isset($_ENV["GEARMAN_PORT"]) ? $_ENV["GEARMAN_PORT"] : 4730;
+}
+
+
+
+if(count($argv) > 1) {
+	$command = strtolower($argv[1]);
+
+	switch($command) {
+		case 'autoconf':
+			echo "yes\n";
+		break;
+		case 'config':
+			print_config($host, $port);
+		
+		break;
+	}
+
+}
+else{
+	print_data($host, $port);
+	
+}
+
+
+
+
+
+function print_config($host, $port) {
+
+	$jobs = get_data($host, $port);
+	$str = "graph_title Gearman Workers
+graph_category gearman
+graph_info This graph shows gearman workers 
+";
+
+
+
+	$i = 0;
+	foreach($jobs as $job) {
+
+	$type = $i++  ? "STACK" : "AREA";
+
+
+$str .= "{$job["function"]}_workers.label {$job["function"]} Workers
+{$job["function"]}_workers.draw {$type}
+";
+
+	}
+
+	echo $str;
+
+}
+
+
+function print_data($host, $port) {
+	$jobs = get_data($host, $port);
+	$str = "";
+
+	foreach($jobs as $job) {
+		$str .= "{$job["function"]}_workers.value {$job["connected"]}\n";
+	}
+
+	echo $str;
+
+}	
+
+
+function get_data($host, $port) {
+	$handle = fsockopen($host, $port, $errorNumber,$errorString, 30);
+	$status = array();
+
+	if($handle!=null){
+		fwrite($handle,"status\n");
+		while (!feof($handle)) {
+			$line = fgets($handle, 4096);
+			if( $line==".\n"){
+				break;
+			}
+			$matches = array();
+			if( preg_match("~^(.*)[ \t](\d+)[ \t](\d+)[ \t](\d+)~",$line,$matches) ){
+				$status[$matches[1]] = array(
+						'function' => $matches[1],
+						'total' => $matches[2],
+						'running' => $matches[3],
+						'connected' => $matches[4],
+						);
+			}
+		}
+		fclose($handle);
+
+	}
+	ksort($status);
+	return $status;
+}

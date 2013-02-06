@@ -1,0 +1,58 @@
+#!/usr/bin/php -q
+<?php
+
+$name = $argv[0];
+
+if (strpos($name, '-') !== false) {
+	list(,$host, $port) = explode('-', $name);
+}
+else {
+	$host = isset($_ENV["MMC_HOST"]) ? $_ENV["MMC_HOST"] : "127.0.0.1";
+	$port = isset($_ENV["MMC_PORT"]) ? $_ENV["MMC_PORT"] : 11211;
+}
+
+if(isset($argv[1]) && ($argv[1] == "autoconf")) {
+	print "yes\n";
+	exit;
+}
+elseif(isset($argv[1]) && ($argv[1] == "config")) {
+	print "graph_title Memcache Connections $host:$port\n";
+	print "graph_args --base 1000\n";
+	print "graph_vlabel cache connections per \${graph_period}\n";
+	print "graph_category memcache\n";
+	print "curr_connections.label connections\n";
+	print "curr_connections.min 0\n";
+	print "curr_connections.draw AREA\n";
+	print "curr_connections.info number of connections\n";
+	print "connection_structures.label structures\n";
+	print "connection_structures.min 0\n";
+	print "connection_structures.draw LINE1\n";
+	print "connection_structures.info number of connection structures\n";
+	exit;
+}
+
+$stats = get_mmc_stats($host, $port);
+print "curr_connections.value " . $stats["curr_connections"] . "\n";
+print "connection_structures.value " . $stats["connection_structures"]."\n";
+
+
+function get_mmc_stats($host, $port) {
+	$stats = array();
+
+	$fp = fsockopen($host, $port, $errno, $errstr, 30);
+	if ($fp) {
+		fwrite($fp, "stats\n\r");
+		$ret = fgets($fp, 128);
+		$ret = trim($ret);
+		$count = 0;
+		while ($ret != 'END') {
+			$count++;
+			$stat = explode(" ", $ret);
+			$stats[trim($stat[1])] = trim($stat[2]);
+			$ret = fgets($fp, 128);
+			$ret = trim($ret);
+		}
+		fclose($fp);
+	}
+	return $stats;
+}
